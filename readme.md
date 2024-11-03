@@ -1,6 +1,11 @@
 # KConst
 A proof-of-concept compiler plugin for Kotlin, designed to improve constant folding and constant propagation.
 
+### I want to see it run!
+Run `gradle test -i` to run the tests, displaying output. The plugin outputs the IR both before and after running upon it.
+It also outputs, for the internship application, any calls that start with "eval" that have been simplified, and their output values.  
+To modify the input code being tested, edit `plugin/src/test/kotlin/org/eu/aschwz/kconst/KConstTest.kt` and change the embedded Kotlin code.
+
 ### What can we currently optimize on?
 We can optimize on any _deterministic_ function operating only on, and returning only _constant types_.  
 We define a constant type as either a String, Int or Boolean (other number types are omitted for simplicity)  
@@ -70,11 +75,11 @@ Basically, all deterministic things can be evaluated at compile-time.
 
 ### Optimizations performed
 - if-flattening (also when): For some deterministic boolean X, we replace `if (X) {Y} else {Z}` with either `Y` or `Z`. 
-It's analogus for `when`, provided all the checks before the correct one are deterministic 
+It's analogous for `when`, provided all the checks before the correct one are deterministic 
 (any after don't matter, as they won't evaluate).
 - call-flattening: For a deterministic function `F` with deterministic parameters `N0, N1, N2 ...` we replace 
 `F(N0, N1, ...)` with the actual result.
-- while-flattening: For a while loop `while (X) {Y}` we replace it with its collated side-effects 
+- while-flattening: For a while loop `while (X) {Y}` we replace it with its collated side effects 
 (mostly variables set to their results). This makes the loop deterministic.  
 We can do this only if:
   - `X` and `Y` _remain_ deterministic throughout all iterations
