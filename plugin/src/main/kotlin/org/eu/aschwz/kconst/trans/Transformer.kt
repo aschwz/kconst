@@ -37,6 +37,7 @@ import org.jetbrains.kotlin.ir.symbols.IrFunctionSymbol
 import org.jetbrains.kotlin.ir.symbols.IrValueSymbol
 import org.jetbrains.kotlin.ir.symbols.UnsafeDuringIrConstructionAPI
 import org.jetbrains.kotlin.ir.util.deepCopyWithoutPatchingParents
+import org.jetbrains.kotlin.ir.util.dump
 import org.jetbrains.kotlin.utils.addToStdlib.popLast
 import kotlin.math.max
 
@@ -407,6 +408,12 @@ class Transformer(
             val evaluated = interpretBuiltinFunction(ctx, name, orig, constArgs)
                 ?: funcs[call.symbol]?.let {evalFunction(it, call)}
             if (evaluated != null) {
+                if (call.symbol.owner.name.toString().startsWith("eval")) {
+                    println("Flattened this call:")
+                    println(call.dump())
+                    println("to this value (${evaluated.value}):")
+                    println(evaluated.dump())
+                }
                 return evaluated
             } else {
                 isCertain = false

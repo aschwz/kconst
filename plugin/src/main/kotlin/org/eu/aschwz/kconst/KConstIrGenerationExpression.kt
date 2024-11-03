@@ -18,6 +18,7 @@ class KConstIrGenerationExpression(
         pluginContext: IrPluginContext
     ) {
         println(moduleFragment.dump())
+        println("\n-------------\n")
 
         // first, visit to pull out all the functions
         val visitor = FunctionExtractor()
