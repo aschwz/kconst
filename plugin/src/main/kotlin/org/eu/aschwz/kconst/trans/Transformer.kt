@@ -5,6 +5,7 @@ import org.eu.aschwz.kconst.generated.interpretBuiltinFunction
 import org.jetbrains.kotlin.backend.common.IrElementTransformerVoidWithContext
 import org.jetbrains.kotlin.backend.common.extensions.IrPluginContext
 import org.jetbrains.kotlin.backend.common.lower.DeclarationIrBuilder
+import org.jetbrains.kotlin.backend.common.lower.irBlockBody
 import org.jetbrains.kotlin.backend.common.push
 import org.jetbrains.kotlin.backend.wasm.ir2wasm.getSourceLocation
 import org.jetbrains.kotlin.cli.common.messages.CompilerMessageSeverity
@@ -173,20 +174,22 @@ class Transformer(
         return newFun
     }
 
-    override fun visitVariable(declaration: IrVariable): IrStatement {
-        var declaration = if (canWriteBack()) {declaration} else {declaration.deepCopyWithoutPatchingParents()}
+    override fun visitVariable(declaration_: IrVariable): IrStatement {
+        var declaration = if (canWriteBack()) {declaration_} else {declaration_.deepCopyWithoutPatchingParents()}
         val body = declaration.initializer?.transform(this, null)
         declaration.initializer = body
         // if the body isn't const, then we could have side effects, and so we can't fold with this variable
-        declaration.initializer?.const()?.let {env.set(declaration.symbol, it)}
+        declaration.initializer?.const()?.let {env.set(declaration_.symbol, it)}
         return declaration
     }
     override fun visitGetValue(get: IrGetValue): IrExpression {
         val value = env.get(get.symbol)
         return value ?: get
     }
-    override fun visitSetValue(set: IrSetValue): IrExpression {
-        var set = if (canWriteBack()) {set} else {set.deepCopyWithoutPatchingParents()}
+    override fun visitSetValue(set_: IrSetValue): IrExpression {
+        // we _need_ to use the original symbol, else we run into issues
+        var set = if (canWriteBack()) {set_} else {set_.deepCopyWithoutPatchingParents()}
+        set.symbol = set_.symbol
         val body = set.value.transform(this, null)
         set.value = body
         set.value.const()?.let {env.set(set.symbol, it)}
@@ -198,7 +201,6 @@ class Transformer(
 
     override fun visitBlockBody(body: IrBlockBody): IrBody {
         // un-nest nested blocks
-        var body = if (canWriteBack()) {body} else {body.deepCopyWithoutPatchingParents()}
         var newExprs = mutableListOf<IrStatement>()
         for (stmt in body.statements) {
             val newExp = stmt.transform(this, null) as IrStatement
@@ -210,15 +212,31 @@ class Transformer(
                 newExprs.push(newExp)
             }
         }
-        body.statements.clear()
-        body.statements.addAll(newExprs)
-
-        return body
+        val newExprsFiltered = newExprs.filter {
+            !(
+                    it is IrConst<*>
+                            || (it is IrSetValue
+                            && env.get(it.symbol) != null
+                            && !isUncertain()
+                            ) || (it is IrVariable
+                            && env.get(it.symbol) != null
+                            && !isUncertain()
+                            )
+                    )
+        }
+        return if (canWriteBack()) {
+            body.statements.clear()
+            body.statements.addAll(newExprsFiltered)
+            body
+        } else {
+            builder().irBlockBody(body, body = {
+                newExprsFiltered.forEach { +it }
+            })
+        }
     }
 
     override fun visitBlock(block: IrBlock): IrExpression {
         // un-nest nested blocks
-        var block = if (canWriteBack()) {block} else {block.deepCopyWithoutPatchingParents()}
         var newExprs = mutableListOf<IrStatement>()
         for (stmt in block.statements) {
             if (hasBreak || hasContinue) break
@@ -245,9 +263,15 @@ class Transformer(
                  )
             )
         }
-        block.statements.clear()
-        block.statements.addAll(newExprsFiltered)
-        return block
+        return if (canWriteBack()) {
+            block.statements.clear()
+            block.statements.addAll(newExprsFiltered)
+            block
+        } else {
+            builder().irBlock(body = {
+                newExprsFiltered.forEach { +it }
+            })
+        }
     }
 
     override fun visitWhen(whenExpr: IrWhen): IrExpression {
@@ -349,7 +373,7 @@ class Transformer(
                     // return the block with explicit sets
                     popNoWriteBack()
                     return builder().irBlock(body = {
-                        watchlist.forEach {+irSet(it, env.get(it)!!)}
+                        watchlist.toSet().forEach {+irSet(it, env.get(it)!!)}
                     })
                 }
             } else {

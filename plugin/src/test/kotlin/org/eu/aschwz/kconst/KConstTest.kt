@@ -20,10 +20,11 @@ fun eqBools(a: Boolean, b: Boolean) : Boolean {
     return a == b
 }
 fun evalFib(c: Int) : Int {
+    if (false) {while (true) {}}
     var curr = 1
     var last = 1
     var idx = 0
-    while (idx < c) {
+    while (eqBools(idx < c, true)) {
         val tmp = last
         last = curr
         curr = tmp + curr
@@ -31,9 +32,18 @@ fun evalFib(c: Int) : Int {
     }
     return curr
 }
-fun main() {
-    // this is reduced down to `val fa = 8`
-    val fa = evalFib(4)
+
+fun whileExample() : Int {
+    var q = 0
+    while (q < 8) {
+        q += 1
+    }
+    return q
+}
+
+fun foo() : Int {
+    // this is reduced down to `return 8`
+    return evalFib(4)
 }
                 """.trimIndent()
             )
